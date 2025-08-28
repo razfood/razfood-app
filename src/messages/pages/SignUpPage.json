@@ -1,0 +1,34 @@
+
+{
+  "en-US": {
+    "title": "Create an account",
+    "submitButton": "Sign up",
+    "loadingButton": "Signing up...",
+    "emailLabel": "Email address",
+    "passwordLabel": "Password",
+    "githubButton": "Sign up with GitHub",
+    "loginPrompt": "Already have an account?",
+    "loginLink": "Log in"
+  },
+  "es-ES": {
+    "title": "Crear una cuenta",
+    "submitButton": "Registrarse",
+    "loadingButton": "Registrando...",
+    "emailLabel": "Dirección de correo electrónico",
+    "passwordLabel": "Contraseña",
+    "githubButton": "Registrarse con GitHub",
+    "loginPrompt": "¿Ya tienes una cuenta?",
+    "loginLink": "Iniciar sesión"
+  },
+  "pt-BR": {
+    "title": "Criar uma conta",
+    "submitButton": "Cadastrar",
+    "loadingButton": "Cadastrando...",
+    "emailLabel": "Endereço de e-mail",
+    "passwordLabel": "Senha",
+    "githubButton": "Cadastrar com o GitHub",
+    "loginPrompt": "Já tem uma conta?",
+    "loginLink": "Entrar"
+  }
+}
+

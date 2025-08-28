@@ -1,0 +1,51 @@
+// src/components/ui/textarea.tsx
+'use client';
+
+/**
+ * @file Componente de UI atómico para áreas de texto.
+ * @author Raz Podestá - MetaShark Tech
+ * @version 1.0.0
+ * @date 2025-08-28
+ * @copyright MetaShark Tech
+ * @license MIT
+ * @link raz.metashark.tech
+ * @description Una adaptación del componente Textarea de shadcn/ui.
+ */
+
+import * as React from 'react';
+
+import { cn } from '@/lib/utils';
+
+export interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+
+const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ className, ...props }, ref) => {
+  return (
+    <textarea
+      className={cn(
+        'flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+      ref={ref}
+      {...props}
+    />
+  );
+});
+Textarea.displayName = 'Textarea';
+
+export { Textarea };
+
+/**
+ * @module Textarea
+ * @description Componente de área de texto multilínea.
+ *
+ * @section Melhora Contínua
+ *
+ * @subsection Melhorias Futuras
+ * - ((Vigente)) **Auto-ajuste de Altura:** Implementar uma lógica (possivelmente através de um hook `useAutosizeTextarea`) que ajuste dinamicamente a altura da área de texto com base no seu conteúdo, eliminando barras de rolagem desnecessárias e melhorando a UX.
+ * - ((Vigente)) **Contador de Caracteres:** Adicionar uma prop opcional `maxLength` que, quando definida, exiba um contador de caracteres (ex: "120/280") para fornecer feedback ao usuário.
+ *
+ * @subsection Melhorias Adicionadas
+ * - ((Implementada)) **Resolução de Dependência Crítica (TS2307):** A criação deste componente resolve uma dependência fundamental que impedia a compilação do `CreateProductForm`.
+ * - ((Implementada)) **Fundação de UI Atómica:** Adiciona outra peça de UI essencial e reutilizável ao kit de ferramentas do projeto.
+ */
+// src/components/ui/textarea.tsx
