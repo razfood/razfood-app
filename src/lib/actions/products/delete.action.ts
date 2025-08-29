@@ -1,8 +1,11 @@
 // src/lib/actions/products/delete.action.ts
+'use server';
+import 'server-only';
+
 /**
  * @file Server Action atómica para la eliminación de productos.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -12,17 +15,14 @@
  *              suficientes (owner o admin) en el workspace correspondiente
  *              antes de ejecutar la operación destructiva.
  */
-'use server';
-import 'server-only';
 
 import { revalidatePath } from 'next/cache';
-import { ZodError } from 'zod';
 
 import { requireSitePermission } from '@/lib/auth/user-permissions';
 import { logger } from '@/lib/logger';
 import { createClient } from '@/lib/supabase/server';
 import { type ActionResult, DeleteProductClientSchema } from '@/lib/validators';
-import { createAuditLog, createPersistentErrorLog } from '../_helpers';
+import { createAuditLog, createPersistentErrorLog } from '@/lib/actions/_helpers/error-log.helper';
 
 /**
  * @public
@@ -47,8 +47,8 @@ export async function deleteProductAction(formData: FormData): Promise<ActionRes
     }
 
     const { productId } = validation.data;
+    const supabase = await createClient(); // Correcto: await para obtener el cliente
 
-    const supabase = createClient();
     const { data: product, error: fetchError } = await supabase
       .from('products')
       .select('site_id, name')
@@ -56,6 +56,7 @@ export async function deleteProductAction(formData: FormData): Promise<ActionRes
       .single();
 
     if (fetchError || !product) {
+      logger.warn(`[Action:DeleteProduct] Producto no encontrado: ${productId}`);
       return { success: false, error: 'error_product_not_found' };
     }
 
@@ -70,9 +71,7 @@ export async function deleteProductAction(formData: FormData): Promise<ActionRes
 
     const { error: deleteError } = await supabase.from('products').delete().eq('id', productId);
 
-    if (deleteError) {
-      throw deleteError;
-    }
+    if (deleteError) throw deleteError;
 
     logger.info(`[Action:DeleteProduct] Producto eliminado con éxito: ${productId}`);
 
@@ -82,7 +81,7 @@ export async function deleteProductAction(formData: FormData): Promise<ActionRes
       metadata: { productName: product.name, siteId: product.site_id },
     });
 
-    revalidatePath(`/dashboard/sites/${product.site_id}/campaigns`);
+    revalidatePath(`/dashboard/sites/${product.site_id}/products`);
 
     return { success: true, data: undefined };
   } catch (error) {
@@ -93,6 +92,7 @@ export async function deleteProductAction(formData: FormData): Promise<ActionRes
     return { success: false, error: 'error_unexpected', data: { errorId } };
   }
 }
+
 /**
  * @module delete-product-action
  * @description Server Action para la eliminación de productos.
@@ -101,7 +101,6 @@ export async function deleteProductAction(formData: FormData): Promise<ActionRes
  *
  * @subsection Melhorias Futuras
  * - ((Vigente)) **Soft Deletes (Archivado):** Proponho implementar uma `archiveProductAction` que mude o `status` do produto para 'archived' em vez de uma exclusão permanente. A exclusão permanente (`hard delete`) poderia então ser uma ação separada, de maior privilégio, ou executada por um job de limpeza em itens arquivados há mais de 30 dias. Esta é uma prática de élite para a recuperação de dados.
- * - ((Vigente)) **Actualización de Contadores Denormalizados:** Se a tabela `sites` tivesse um contador `product_count`, esta ação (ou a RPC correspondente) deveria decrementá-lo atomicamente.
  * - ((Vigente)) **Transacción RPC para Eliminación en Cascada:** Se um produto tivesse entidades dependentes (ex: `product_variants`), a lógica de eliminação deveria ser movida para uma função RPC de PostgreSQL para garantir que todas as entidades relacionadas sejam eliminadas numa única transação atómica.
  */
 // src/lib/actions/products/delete.action.ts

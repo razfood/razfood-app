@@ -62,3 +62,43 @@ Módulo de Analíticas: Construir un dashboard de analíticas que procese los da
 Gestión de Tareas y Secuenciación (GTS)
 Declaración de Finalización: El blueprint conceptual completo y el roadmap detallado para el proyecto Restoralia han sido establecidos.
 Anuncio del Siguiente Paso: Retomando el plan del hilo actual, el siguiente paso es construir la UI para visualizar los productos existentes. Procederé a crear el src/components/campaigns/CampaignsDataTable.tsx, que mostrará los productos del menú en una vista de tabla.
+---
+acualzacon
+// .docs/roadmap.md
+# Blueprint Conceptual de Élite: razfood (Revisión Detallada)
+## 1. Visión Ejecutiva y Propuesta de Valor (El "Porqué")
+**razfood** es una plataforma SaaS (Software as a Service) multi-tenant de nivel de producción, diseñada para ser el sistema operativo de inteligencia para restaurantes modernos.
+
+... (contenido sin cambios) ...
+
+## 4. Roadmap Detallado para Futuros Hilos de Desarrollo
+Este roadmap es una guía secuencial para construir "razfood" sobre la fundación que hemos establecido.
+
+### Fase 1: Migración de Infraestructura de Datos a Prisma (Prioridad Cero)
+*   **Objetivo:** Reemplazar el acceso directo a datos vía `supabase-js` por el ORM Prisma para obtener seguridad de tipos de élite, una DX superior y una gestión de migraciones declarativa.
+*   **Acción:**
+    1.  **Sincronización:** Introspeccionar la base de datos existente para generar el `schema.prisma` inicial (`pnpm prisma db pull`).
+    2.  **Cliente:** Generar el cliente de Prisma tipado (`pnpm prisma generate`).
+    3.  **Refactorización de Capa de Datos:** Migrar incrementalmente todos los aparatos en `src/lib/data/` para que utilicen el cliente Prisma en lugar del cliente Supabase.
+    4.  **Refactorización de Resolvers/Actions:** Asegurar que toda la lógica de negocio consuma la nueva capa de datos basada en Prisma.
+
+### Fase 2: Completar el CRUD del Catálogo (Este Hilo)
+*   **Tabla de Productos:** Construir la UI para visualizar la lista de `products` dentro de un `site`.
+*   **Acciones de Servidor:** Crear las Server Actions `createProductAction`, `updateProductAction`, `deleteProductAction` (que ahora consumirán la capa de datos de Prisma).
+*   **Integración Completa:** Conectar la UI a las Server Actions, implementando UI optimista.
+*   **Internacionalización (i18n):** Refactorizar todos los componentes del pilar "Products".
+
+### Fase 3: El Flujo de Pedido del Cliente (Nuevo Hilo)
+... (resto de fases re-numeradas sin cambios de contenido) ...
+
+/**
+ * @module roadmap
+ * @description Hoja de ruta estratégica del proyecto razfood.
+ *
+ * @section Melhora Contínua
+ *
+ * @subsection Melhorias Futuras
+ * - ((Vigente)) **Roadmap Interactivo:** Migrar este roadmap a uma ferramenta de gestão de projetos (como Linear ou Notion) com timelines, responsáveis e dependências explícitas para uma gestão de élite.
+ * - ((Vigente)) **Métricas de Éxito por Fase:** Definir KPIs específicos para cada fase (ex: "Fase 3: Redução do tempo de checkout em 15%") para medir o impacto de cada ciclo de desenvolvimento.
+ */
+// .docs/roadmap.md

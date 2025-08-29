@@ -4,7 +4,7 @@
 /**
  * @file Componente atómico para renderizar una tarjeta de pedido en el tablero Kanban.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -19,13 +19,15 @@ import { useTranslations } from 'next-intl';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/es'; // Importar locales necesarios
+import 'dayjs/locale/pt-br';
+import 'dayjs/locale/en';
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { type DashboardOrder } from '@/lib/data/orders/dashboard.data';
 import { formatMoney } from '@/utils/paddle/parse-money';
-import { type Tables } from '@/lib/types/database';
+import { clientLogger } from '@/lib/logger';
 
 dayjs.extend(relativeTime);
 
@@ -39,11 +41,14 @@ interface OrderCardProps {
  * @public
  * @component OrderCard
  * @description Renderiza una tarjeta individual que representa un pedido en el tablero Kanban.
+ * @param {OrderCardProps} props - Las propiedades del componente.
+ * @returns {React.ReactElement}
  */
 export function OrderCard({ order }: OrderCardProps): React.ReactElement {
+  clientLogger.trace(`[OrderCard] Renderizando tarjeta para pedido: ${order.id}`);
   const t = useTranslations('OrdersDashboard.card');
-  const locale = useTranslations()('Locale');
-  dayjs.locale(locale);
+  const locale = useTranslations()('Locale'); // "en-US", "es-ES", etc.
+  dayjs.locale(locale.split('-')[0]); // Usa 'en', 'es', 'pt'
 
   const timeFromNow = dayjs(order.created_at).fromNow();
 
@@ -91,11 +96,8 @@ export function OrderCard({ order }: OrderCardProps): React.ReactElement {
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Indicador de Tipo de Pedido:** Quando o tipo de pedido (`delivery`, `pickup`, `dine_in`) for adicionado ao modelo de dados `orders`, este cartão deve exibir um ícone correspondente para uma identificação visual rápida.
- * - ((Vigente)) **Menu de Ações Contextuais:** Adicionar um `DropdownMenu` na tarjeta com ações relevantes para o estado do pedido, como "Imprimir Comprovante", "Atribuir Entregador" ou "Marcar como Pronto para Retirada".
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Tipado Estrito (TS7006 Resolvido):** Adicionado tipado explícito `EnrichedOrderItem` ao parâmetro da função `.map()`, eliminando o erro de `any` implícito e garantindo a segurança de tipos.
- * - ((Implementada)) **Dados Reais na UI:** O componente agora consome a estrutura de dados aninhada e enriquecida, exibindo os nomes reais dos produtos no resumo do pedido, tornando a UI significativamente mais útil.
+ * - ((Vigente)) **Indicador de Tipo de Pedido:** Quando o tipo de pedido (`delivery`, `pickup`, `dine_in`) for adicionado ao modelo de dados `orders`, este cartão deve exibir um ícone correspondente (ex: `Truck`, `ShoppingBag`, `Utensils`) para uma identificação visual rápida no Kanban.
+ * - ((Vigente)) **Menu de Ações Contextuais:** Adicionar um `DropdownMenu` na tarjeta com ações relevantes para o estado do pedido, como "Imprimir Comprovante", "Ver Detalhes" (abrindo um modal) ou "Marcar como Pronto para Retirada".
+ * - ((Vigente)) **Destaque Visual para Pedidos Atrasados:** Adicionar uma lógica que compare `created_at` com o tempo atual. Se um pedido no estado 'pending' ou 'confirmed' tiver mais de X minutos, a borda do cartão poderia se tornar amarela ou vermelha para alertar a equipe.
  */
 // src/components/orders/OrderCard.tsx

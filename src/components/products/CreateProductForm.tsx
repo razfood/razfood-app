@@ -1,18 +1,19 @@
 // src/components/products/CreateProductForm.tsx
+'use client';
+
 /**
  * @file Formulario de cliente soberano para la creación de nuevos productos.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
  * @link raz.metashark.tech
- * @description Este aparato ha sido refactorizado a un estándar de élite. Gestiona
- *              su propio estado con `react-hook-form` y `zodResolver` para una
- *              validación robusta. Es un componente de presentación puro que invoca
- *              un callback `onSubmit` con los datos validados.
+ * @description Este aparato gestiona su propio estado con `react-hook-form` y `zodResolver`
+ *              para una validación robusta. Es un componente de presentación puro que invoca
+ *              un callback `onSubmit` con los datos validados y un callback `onSuccess`
+ *              tras la finalización exitosa.
  */
-'use client';
 
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { useTranslations } from 'next-intl';
@@ -25,7 +26,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { CreateProductClientSchema } from '@/lib/validators/product.schemas';
-import { clientLogger } from '@/lib/logging';
+import { clientLogger } from '@/lib/logger';
 
 type FormData = z.infer<typeof CreateProductClientSchema>;
 
@@ -33,6 +34,7 @@ interface CreateProductFormProps {
   siteId: string;
   onSubmit: (formData: FormData) => void;
   isPending: boolean;
+  onSuccess: () => void;
 }
 
 /**
@@ -42,9 +44,14 @@ interface CreateProductFormProps {
  * @param {CreateProductFormProps} props - Propiedades para configurar el formulario.
  * @returns {React.ReactElement}
  */
-export function CreateProductForm({ siteId, onSubmit, isPending }: CreateProductFormProps): React.ReactElement {
+export function CreateProductForm({
+  siteId,
+  onSubmit,
+  isPending,
+  onSuccess,
+}: CreateProductFormProps): React.ReactElement {
   clientLogger.trace('[CreateProductForm] Renderizando formulario soberano.');
-  const t = useTranslations('CampaignsPage.form');
+  const t = useTranslations('ProductsPage.form');
 
   const form = useForm<FormData>({
     resolver: zodResolver(CreateProductClientSchema),
@@ -60,15 +67,14 @@ export function CreateProductForm({ siteId, onSubmit, isPending }: CreateProduct
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = form;
 
-  const processSubmit: SubmitHandler<FormData> = (data) => {
+  const processSubmit: SubmitHandler<FormData> = async (data) => {
     clientLogger.trace('[CreateProductForm] Formulario validado. Invocando callback onSubmit.');
-    onSubmit(data);
+    await onSubmit(data as any); // El tipo se fuerza aquí ya que el hook padre maneja la promesa.
+    onSuccess();
   };
-
-  const isLoading = isSubmitting || isPending;
 
   return (
     <form onSubmit={handleSubmit(processSubmit)} className="space-y-4 relative">
@@ -80,7 +86,7 @@ export function CreateProductForm({ siteId, onSubmit, isPending }: CreateProduct
           id="name"
           placeholder={t('name_placeholder')}
           {...register('name')}
-          disabled={isLoading}
+          disabled={isPending}
           hasError={!!errors.name}
         />
         {errors.name && (
@@ -97,8 +103,8 @@ export function CreateProductForm({ siteId, onSubmit, isPending }: CreateProduct
           type="number"
           step="0.01"
           placeholder={t('price_placeholder')}
-          {...register('price')}
-          disabled={isLoading}
+          {...register('price', { valueAsNumber: true })}
+          disabled={isPending}
           hasError={!!errors.price}
         />
         {errors.price && (
@@ -114,13 +120,13 @@ export function CreateProductForm({ siteId, onSubmit, isPending }: CreateProduct
           id="description"
           placeholder={t('description_placeholder')}
           {...register('description')}
-          disabled={isLoading}
+          disabled={isPending}
         />
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {isLoading ? t('creating_button') : t('create_button')}
+      <Button type="submit" className="w-full" disabled={isPending}>
+        {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        {isPending ? t('creating_button') : t('create_button')}
       </Button>
     </form>
   );
@@ -133,7 +139,7 @@ export function CreateProductForm({ siteId, onSubmit, isPending }: CreateProduct
  *
  * @subsection Melhorias Futuras
  * - ((Vigente)) **Componente `CurrencyInput`:** Proponho, para uma UX de élite, substituir o `<Input type="number">` por um componente `CurrencyInput` especializado. Este novo componente atómico poderia formatar automaticamente o valor como moeda enquanto o usuário digita e gerenciar a conversão para o formato numérico correto, melhorando a usabilidade e prevenindo erros de entrada.
- * - ((Vigente)) **Upload de Imagem:** Proponho adicionar um componente `ImageUploader` a este formulário. Isso permitiria aos usuários subir uma imagem para o produto, que seria armazenada no Supabase Storage e vinculada através da coluna `image_url`.
- * - ((Vigente)) **Seleção de Categoria:** Proponho adicionar um `<Select>` para que o usuário possa associar o produto a uma ou mais `categories` (a serem criadas), permitindo uma melhor organização do menu.
+ * - ((Vigente)) **Upload de Imagem:** Adicionar um componente `ImageUploader` a este formulário. Isso permitiria aos usuários subir uma imagem para o produto, que seria armazenada no Supabase Storage e vinculada através da coluna `image_url`.
+ * - ((Vigente)) **Seleção de Categoria:** Adicionar um `<Select>` para que o usuário possa associar o produto a uma ou mais `categories` (a serem criadas), permitindo uma melhor organização do menu.
  */
 // src/components/products/CreateProductForm.tsx

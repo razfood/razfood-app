@@ -1,22 +1,23 @@
 // src/components/products/products-columns.tsx
+'use client';
+
 /**
  * @file Define las columnas para la tabla de datos de productos.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
  * @link raz.metashark.tech
  * @description Este aparato ha sido refactorizado a una factoría de configuración pura.
- *              Define la estructura y renderizado para la tabla de productos, consumiendo
- *              componentes de celda soberanos y recibiendo toda la lógica y traducciones
- *              a través de inyección de dependencias.
+ *              Define la estructura, renderizado y acciones para la tabla de
+ *              productos, consumiendo componentes de celda soberanos y recibiendo toda
+ *              la lógica y traducciones a través de inyección de dependencias.
  */
-'use client';
 
 import React from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
-import { type ColumnDef } from '@tanstack/react-table';
+import { type useTranslations } from 'next-intl';
+import { type ColumnDef, type Row } from '@tanstack/react-table';
 import dayjs from 'dayjs';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 
@@ -32,15 +33,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ConfirmationDialog } from '@/components/shared/confirmation/ConfirmationDialog';
 import { Status } from '@/components/shared/status/status';
-import type { Products } from '@/lib/types/database';
+import type { Tables } from '@/lib/types/database';
 import { formatMoney } from '@/utils/paddle/parse-money';
-import { useDialogState } from '@/lib/hooks/ui/useDialogState';
 import { clientLogger } from '@/lib/logger';
+import { useDialogState } from '@/lib/hooks/ui/useDialogState';
 
-export type ProductRow = Products['Row'];
+export type ProductRow = Tables<'products'>;
 
 interface ProductActionsCellProps {
-  product: ProductRow;
+  row: Row<ProductRow>;
   t: ReturnType<typeof useTranslations>;
   tDialogs: ReturnType<typeof useTranslations>;
   onDelete: (formData: FormData) => void;
@@ -54,16 +55,18 @@ interface ProductActionsCellProps {
  * @description Componente soberano que renderiza el menú de acciones para una fila de producto.
  */
 const ProductActionsCell = ({
-  product,
+  row,
   t,
   tDialogs,
   onDelete,
   isPending,
   mutatingId,
 }: ProductActionsCellProps): React.ReactElement => {
+  const product = row.original;
   const { isOpen, open, setIsOpen } = useDialogState();
 
   const handleConfirmDelete = () => {
+    clientLogger.trace(`[ProductActionsCell] Confirmada eliminación para producto: ${product.id}`);
     const formData = new FormData();
     formData.append('productId', product.id);
     onDelete(formData);
@@ -81,7 +84,7 @@ const ProductActionsCell = ({
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>{t('table.actions.label')}</DropdownMenuLabel>
           <DropdownMenuItem
-            onClick={() => clientLogger.info(`[columns] Placeholder: Editar producto ID: ${product.id}`)}
+            onClick={() => clientLogger.info(`[ProductActionsCell] Placeholder: Editar producto ID: ${product.id}`)}
           >
             <Pencil className="mr-2 h-4 w-4" />
             {t('table.actions.edit')}
@@ -103,13 +106,13 @@ const ProductActionsCell = ({
         isOpen={isOpen}
         onOpenChange={setIsOpen}
         onConfirm={handleConfirmDelete}
-        title={t('deleteDialog.title')}
-        description={t.rich('deleteDialog.description', {
+        title={tDialogs('deleteProduct.title')}
+        description={tDialogs.rich('deleteProduct.description', {
           productName: product.name,
           strong: (chunks) => <strong>{chunks}</strong>,
         })}
-        cancelButtonText={tDialogs('generic_cancelButton')}
-        confirmButtonText={t('deleteDialog.confirmButton')}
+        cancelButtonText={tDialogs('generic.cancelButton')}
+        confirmButtonText={tDialogs('deleteProduct.confirmButton')}
         isPending={isPending && mutatingId === product.id}
       />
     </>
@@ -127,8 +130,8 @@ export interface GetProductsColumnsProps {
 /**
  * @public
  * @function getProductsColumns
- * @description Factoría que construye el array de definiciones de columna.
- * @param {GetProductsColumnsProps} props - Dependencias inyectadas.
+ * @description Factoría que construye el array de definiciones de columna para la tabla de productos.
+ * @param {GetProductsColumnsProps} props - Dependencias inyectadas (handlers, i18n, estado).
  * @returns {ColumnDef<ProductRow>[]}
  */
 export const getProductsColumns = ({
@@ -143,15 +146,15 @@ export const getProductsColumns = ({
     header: ({ table }) => (
       <Checkbox
         checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && 'indeterminate')}
-        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-        aria-label="Select all"
+        onCheckedChange={(value: boolean) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label={t('table.actions.selectAll')}
       />
     ),
     cell: ({ row }) => (
       <Checkbox
         checked={row.getIsSelected()}
-        onCheckedChange={(value) => row.toggleSelected(!!value)}
-        aria-label="Select row"
+        onCheckedChange={(value: boolean) => row.toggleSelected(!!value)}
+        aria-label={t('table.actions.selectRow')}
       />
     ),
     enableSorting: false,
@@ -172,7 +175,7 @@ export const getProductsColumns = ({
     header: () => <div className="text-right">{t('table.headers.price')}</div>,
     cell: ({ row }) => {
       const price = parseFloat(String(row.getValue('price')));
-      const formatted = formatMoney(price, 'USD'); // TODO: Obtener moneda del workspace
+      const formatted = formatMoney(price, 'USD');
       return <div className="text-right font-medium">{formatted}</div>;
     },
   },
@@ -186,7 +189,7 @@ export const getProductsColumns = ({
     enableHiding: false,
     cell: ({ row }) => (
       <ProductActionsCell
-        product={row.original}
+        row={row}
         t={t}
         tDialogs={tDialogs}
         onDelete={onDelete}
@@ -196,6 +199,7 @@ export const getProductsColumns = ({
     ),
   },
 ];
+
 /**
  * @module products-columns
  * @description Define la estructura y renderizado para la tabla de productos.
@@ -204,7 +208,7 @@ export const getProductsColumns = ({
  *
  * @subsection Melhorias Futuras
  * - ((Vigente)) **Moneda Dinámica:** A lógica de formatação de preço atualmente assume USD. Proponho refatorar para que o `workspace` (restaurante) tenha uma `currency_code` definida, e que este valor seja passado até aqui para formatar o preço na moeda correta.
- * - ((Vigente)) **Edición en Línea:** Proponho transformar a célula `name` em um componente `EditableText`. Ao salvar, ele invocaria uma nova `updateProductAction` injetada através das props da factoría, proporcionando uma UX de edição rápida e de élite.
  * - ((Vigente)) **Cabeceras Ordenables:** Proponho refatorar os `header` para serem componentes de botão que, ao serem clicados, invoquem um callback `onSortChange` injetado via props, permitindo que a UI controle o ordenamento dos dados.
+ * - ((Vigente)) **Edición en Línea:** Proponho transformar a célula `name` em um componente `EditableText`. Ao salvar, ele invocaria uma nova `updateProductAction` injetada através das props da factoría, proporcionando uma UX de edição rápida e de élite.
  */
 // src/components/products/products-columns.tsx

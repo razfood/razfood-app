@@ -1,8 +1,10 @@
 // src/lib/hooks/useProductsPage.ts
+'use client';
+
 /**
  * @file Hook orquestador soberano para la página de gestión de productos.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -10,21 +12,19 @@
  * @description Este hook es el "cerebro" de la página de gestión de productos. Encapsula
  *              toda la lógica de estado, incluyendo filtros sincronizados con la URL,
  *              manejo de UI optimista para operaciones CRUD, y la invocación de Server
- *              Actions con feedback al usuario (toasts). Compone hooks de más bajo nivel
- *              para crear una API cohesiva y de alto nivel para el componente de UI.
+ *              Actions con feedback al usuario a través del sistema de Toasts de la aplicación.
  */
-'use client';
 
-import { useTransition } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import toast from 'react-hot-toast';
 
 import { createProductAction, deleteProductAction } from '@/lib/actions/products';
+import { useToast } from '@/components/ui/use-toast';
 import { type ProductRow } from '@/components/products/products-columns';
-import { useOptimisticResourceManagement } from './use-optimistic-resource-management';
-import { useUrlStateSync } from './ui/useUrlStateSync';
-import { clientLogger } from '../logging';
+import { useOptimisticResourceManagement } from '@/lib/hooks/useOptimisticResourceManagement';
+import { useUrlStateSync } from '@/lib/hooks/ui/useUrlStateSync';
+import { clientLogger } from '@/lib/logger';
+import { type Tables } from '@/lib/types/database';
 
 type ProductStatus = ProductRow['status'] | 'all';
 type SortByOption = 'updated_at_desc' | 'name_asc';
@@ -38,7 +38,10 @@ type ProductFiltersState = {
 export interface UseProductsPageProps {
   initialProducts: ProductRow[];
   initialSearchQuery: string;
-  siteId: string;
+  site: Pick<Tables<'sites'>, 'id' | 'name' | 'subdomain'>;
+  totalCount: number;
+  page: number;
+  limit: number;
   initialStatus?: ProductStatus;
   initialSortBy?: SortByOption;
 }
@@ -55,10 +58,11 @@ export function useProductsPage({
   initialSearchQuery,
   initialStatus,
   initialSortBy,
-  siteId,
+  site,
 }: UseProductsPageProps) {
   clientLogger.trace('[useProductsPage] Hook soberano inicializado.');
-  const t = useTranslations('ProductsPage'); // Namespace canónico para productos
+  const t = useTranslations('ProductsPage');
+  const { toast } = useToast();
   const router = useRouter();
 
   const {
@@ -82,11 +86,11 @@ export function useProductsPage({
       name,
       price,
       slug: name.toLowerCase().replace(/\s+/g, '-'),
-      site_id: siteId,
-      status: 'available', // Estado por defecto para nuevos productos
+      site_id: site.id,
+      status: 'available',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      created_by: null, // El ID del usuario se asigna en el servidor
+      created_by: null,
       description: (formData.get('description') as string) || null,
       image_url: null,
     };
@@ -103,26 +107,39 @@ export function useProductsPage({
     createAction: createProductAction,
     deleteAction: deleteProductAction,
     createOptimisticItem: createOptimisticProduct,
+    deleteItemIdKey: 'productId',
   });
 
   const handleCreateProduct = async (formData: FormData) => {
-    if (!handleCreate) return;
     const result = await handleCreate(formData);
     if (result.success) {
-      toast.success(t('toasts.create_success'));
-      router.refresh(); // Sincroniza con el estado real de la base de datos
+      toast({
+        title: t('toasts.create_success_title'),
+        description: t('toasts.create_success_description'),
+      });
+      router.refresh();
     } else {
-      toast.error(t(`errors.${result.error}` as any, { errorId: result.data?.errorId }) || t('errors.unexpected'));
+      toast({
+        title: t('toasts.error_title'),
+        description: t(`errors.${result.error}` as any, { errorId: result.data?.errorId }) || t('errors.unexpected'),
+        variant: 'destructive',
+      });
     }
   };
 
   const handleDeleteProduct = async (formData: FormData) => {
-    if (!handleDelete) return;
     const result = await handleDelete(formData);
     if (result.success) {
-      toast.success(t('toasts.delete_success'));
+      toast({
+        title: t('toasts.delete_success_title'),
+        description: t('toasts.delete_success_description'),
+      });
     } else {
-      toast.error(t(`errors.${result.error}` as any, { errorId: result.data?.errorId }) || t('errors.unexpected'));
+      toast({
+        title: t('toasts.error_title'),
+        description: t(`errors.${result.error}` as any, { errorId: result.data?.errorId }) || t('errors.unexpected'),
+        variant: 'destructive',
+      });
     }
   };
 

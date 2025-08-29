@@ -4,13 +4,14 @@
 /**
  * @file Componente de UI atómico para campos de entrada.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
  * @link raz.metashark.tech
  * @description Una adaptación del componente Input de shadcn/ui. Incluye una
- *              variante visual para estados de error.
+ *              variante visual para estados de error, lo cual es crítico para
+ *              el feedback en formularios.
  */
 
 import * as React from 'react';
@@ -34,6 +35,13 @@ const inputVariants = cva(
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement>, VariantProps<typeof inputVariants> {}
 
+/**
+ * @public
+ * @component Input
+ * @description Un control de formulario que permite al usuario introducir texto.
+ * @param {InputProps} props - Propiedades que incluyen variantes de estilo y atributos nativos del input.
+ * @returns {React.ReactElement}
+ */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(({ className, type, hasError, ...props }, ref) => {
   return <input type={type} className={cn(inputVariants({ hasError }), className)} ref={ref} {...props} />;
 });
@@ -48,10 +56,7 @@ export { Input };
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Slot para Ícone:** Adicionar suporte para renderizar um ícone opcional dentro do campo de entrada (à esquerda ou à direita), ajustando o padding dinamicamente. Isso aumentaria a sua versatilidade.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Resolução de Dependência Crítica (TS2307/TS2305):** A criação deste componente e a exportação da sua interface de props resolvem a dependência fundamental para `SearchInput` e `CreateProductForm`.
- * - ((Implementada)) **Variante de Erro:** Adicionada uma variante `hasError` para fornecer feedback visual consistente para campos com erros de validação, uma característica de UX de élite.
+ * - ((Vigente)) **Slot para Ícone:** Adicionar suporte para renderizar um ícone opcional dentro do campo de entrada (à esquerda ou à direita), ajustando o padding dinamicamente. Isso centralizaria a lógica atualmente implementada no `SearchInput` e aumentaria a versatilidade deste componente base.
+ * - ((Vigente)) **Input com Addon:** Criar um componente composto que permita adicionar "addons" de texto ou botões antes ou depois do campo de entrada (ex: para mostrar a unidade de uma moeda ou um botão de "copiar").
  */
 // src/components/ui/input.tsx

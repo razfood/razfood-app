@@ -4,7 +4,7 @@
 /**
  * @file Hook soberano para la lógica del tablero Kanban de pedidos.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -18,7 +18,7 @@
 import { useState, useMemo, useTransition, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { type DragEndEvent } from '@dnd-kit/core';
-import toast from 'react-hot-toast';
+import { useToast } from '@/components/ui/use-toast';
 
 import { useRealtimeOrders } from '@/lib/hooks/useRealtimeOrders';
 import { type DashboardOrder } from '@/lib/data/orders/dashboard.data';
@@ -40,21 +40,22 @@ interface UseOrdersKanbanProps {
  */
 export function useOrdersKanban({ initialOrders, workspaceId }: UseOrdersKanbanProps) {
   const t = useTranslations('OrdersDashboard');
+  const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [orders, setOrders] = useState<DashboardOrder[]>(initialOrders);
 
   const onNewOrder = useCallback(
     (newOrder: Tables<'orders'>) => {
-      // Para renderizar correctamente, necesitamos enriquecer el nuevo pedido con los tipos anidados.
+      // El payload de Realtime no incluye JOINS, por lo que enriquecemos el tipo de forma optimista.
       const enrichedOrder: DashboardOrder = {
         ...newOrder,
-        order_items: [], // La suscripción no devuelve joins, se podría hacer un fetch adicional si es necesario.
-        profiles: null,
+        order_items: [], // Se necesitaría un fetch adicional para poblar esto.
+        profiles: null, // Se necesitaría un fetch adicional para poblar esto.
       };
       setOrders((current) => [enrichedOrder, ...current]);
-      toast.success(t('toasts.new_order_received'));
+      toast({ title: t('toasts.new_order_received'), description: `ID: ${newOrder.id.substring(0, 8)}` });
     },
-    [t],
+    [t, toast],
   );
 
   const onUpdateOrder = useCallback((updatedOrder: Tables<'orders'>) => {
@@ -64,13 +65,19 @@ export function useOrdersKanban({ initialOrders, workspaceId }: UseOrdersKanbanP
   useRealtimeOrders({ workspaceId, onNewOrder, onUpdateOrder });
 
   const ordersByStatus = useMemo(() => {
-    const grouped: Record<string, DashboardOrder[]> = {};
-    initialOrders[0] &&
-      Object.keys(grouped).forEach((status) => {
-        grouped[status] = orders.filter((order) => order.status === status);
-      });
-    return grouped;
-  }, [orders, initialOrders]);
+    clientLogger.trace('[useOrdersKanban] Re-calculando agrupación de pedidos por estado.');
+    return orders.reduce(
+      (acc, order) => {
+        const status = order.status;
+        if (!acc[status]) {
+          acc[status] = [];
+        }
+        acc[status].push(order);
+        return acc;
+      },
+      {} as Record<Enums<'order_status'>, DashboardOrder[]>,
+    );
+  }, [orders]);
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
@@ -83,6 +90,7 @@ export function useOrdersKanban({ initialOrders, workspaceId }: UseOrdersKanbanP
 
     if (!draggedOrder || draggedOrder.status === newStatus) return;
 
+    clientLogger.trace(`[useOrdersKanban] Intento de mover pedido ${orderId} a ${newStatus}.`);
     setOrders((current) => current.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o)));
 
     startTransition(async () => {
@@ -96,10 +104,10 @@ export function useOrdersKanban({ initialOrders, workspaceId }: UseOrdersKanbanP
           orderId,
           error: result.error,
         });
-        toast.error(t('toasts.update_error'));
+        toast({ title: t('toasts.update_error_title'), description: result.error, variant: 'destructive' });
         setOrders(originalOrders);
       } else {
-        toast.success(t('toasts.update_success'));
+        toast({ title: t('toasts.update_success_title'), description: t('toasts.update_success_description') });
       }
     });
   };
@@ -108,6 +116,7 @@ export function useOrdersKanban({ initialOrders, workspaceId }: UseOrdersKanbanP
     orders,
     ordersByStatus,
     handleDragEnd,
+    isPending,
   };
 }
 
@@ -118,7 +127,7 @@ export function useOrdersKanban({ initialOrders, workspaceId }: UseOrdersKanbanP
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Fetch Adicional para Nuevos Pedidos:** O evento de `INSERT` do Supabase Realtime não inclui dados de `JOIN` (como `profiles` ou `order_items`). Proponho que o callback `onNewOrder` dispare uma Server Action `getOrderDetails(orderId)` para obter os dados enriquecidos e garantir que o novo `OrderCard` seja renderizado com todas as informações.
- * - ((Vigente)) **Prevenção de "Flickering":** Se um usuário arrasta um cartão e outro usuário o atualiza simultaneamente, pode ocorrer um "flicker". Proponho implementar uma lógica que ignore o evento de `UPDATE` em tempo real para um pedido que está sendo ativamente arrastado pelo usuário local (`mutatingId`).
+ * - ((Vigente)) **Fetch Adicional para Nuevos Pedidos:** O evento de `INSERT` do Supabase Realtime não inclui dados de `JOIN`. Proponho que o callback `onNewOrder` dispare uma Server Action `getOrderDetails(orderId)` para obter os dados enriquecidos (`profiles`, `order_items`) e garantir que o novo `OrderCard` seja renderizado com todas as informações.
+ * - ((Vigente)) **Prevenção de "Flickering":** Se um usuário arrasta um cartão e outro usuário o atualiza simultaneamente, pode ocorrer um "flicker". Proponho implementar uma lógica que ignore o evento de `UPDATE` em tempo real para um pedido que está sendo ativamente arrastado pelo usuário local (usando uma variável de estado `mutatingId`).
  */
 // src/lib/hooks/useOrdersKanban.ts

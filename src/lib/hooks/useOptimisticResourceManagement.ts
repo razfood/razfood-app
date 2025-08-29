@@ -4,7 +4,7 @@
 /**
  * @file Hook soberano y genérico para la gestión optimista de recursos.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.1.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -61,6 +61,7 @@ export function useOptimisticResourceManagement<TItem extends ItemWithId>({
   const handleCreate = useCallback(
     async (formData: FormData): Promise<ActionResult<{ id: string }>> => {
       const optimisticItem = createOptimisticItem(formData);
+      clientLogger.trace('[Optimistic] Iniciando creación optimista.', { id: optimisticItem.id });
       let result: ActionResult<{ id: string }> = { success: false, error: 'unknown' };
 
       startTransition(() => {
@@ -71,7 +72,10 @@ export function useOptimisticResourceManagement<TItem extends ItemWithId>({
       result = await createAction(formData);
 
       if (!result.success) {
+        clientLogger.warn('[Optimistic] Creación fallida. Revirtiendo UI.', { id: optimisticItem.id });
         setOptimisticItems((current) => current.filter((item) => item.id !== optimisticItem.id));
+      } else {
+        clientLogger.trace('[Optimistic] Creación confirmada por el servidor.', { id: result.data.id });
       }
 
       setMutatingId(null);
@@ -84,6 +88,7 @@ export function useOptimisticResourceManagement<TItem extends ItemWithId>({
     async (formData: FormData): Promise<ActionResult<void>> => {
       const itemId = formData.get(deleteItemIdKey) as string;
       const originalItems = optimisticItems;
+      clientLogger.trace('[Optimistic] Iniciando eliminación optimista.', { id: itemId });
       let result: ActionResult<void> = { success: false, error: 'unknown' };
 
       startTransition(() => {
@@ -94,7 +99,10 @@ export function useOptimisticResourceManagement<TItem extends ItemWithId>({
       result = await deleteAction(formData);
 
       if (!result.success) {
+        clientLogger.warn('[Optimistic] Eliminación fallida. Revirtiendo UI.', { id: itemId });
         setOptimisticItems(originalItems);
+      } else {
+        clientLogger.trace('[Optimistic] Eliminación confirmada por el servidor.', { id: itemId });
       }
 
       setMutatingId(null);
@@ -120,11 +128,7 @@ export function useOptimisticResourceManagement<TItem extends ItemWithId>({
  *
  * @subsection Melhorias Futuras
  * - ((Vigente)) **Gestión de Actualizaciones (`handleUpdate`):** Adicionar um `updateAction` e um `handleUpdate` para completar o ciclo CRUD. A atualização otimista substituiria o item no estado local enquanto a `Server Action` é executada, com uma lógica de rollback em caso de falha.
- * - ((Vigente)) **Rollback Mais granular:** Em caso de falha na criação, a implementação atual remove o item otimista. Uma estratégia mais robusta poderia marcá-lo visualmente como "falhou ao criar" com uma opção para "tentar novamente", preservando os dados que o usuário inseriu no formulário.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Lógica de UI Otimista Centralizada (DRY):** Este hook encapsula o padrão de UI otimista de forma genérica e reutilizável, eliminando a necessidade de reimplementar esta lógica complexa em cada página e aderindo estritamente ao princípio DRY.
- * - ((Implementada)) **API de Alto Nível:** Fornece uma API simples (`handleCreate`, `handleDelete`) que abstrai a complexidade do `useTransition` e da manipulação do estado otimista, melhorando a DX para os desenvolvedores que o consomem.
- * - ((Implementada)) **Feedback de UI Instantâneo:** Permite que a UI reaja instantaneamente às ações do usuário, proporcionando uma experiência de aplicação web moderna e de alto desempenho.
+ * - ((Vigente)) **Rollback Mais Granular:** Em caso de falha na criação, a implementação atual remove o item otimista. Uma estratégia mais robusta poderia marcá-lo visualmente como "falhou ao criar" com uma opção para "tentar novamente", preservando os dados que o usuário inseriu no formulário.
+ * - ((Vigente)) **Tipado Fuerte para `ActionResult`:** Em vez de retornar `{ success: false, error: 'unknown' }` como fallback, o hook poderia ser tipado para aceitar um `defaultError` específico do domínio, melhorando a segurança de tipos.
  */
 // src/lib/hooks/useOptimisticResourceManagement.ts

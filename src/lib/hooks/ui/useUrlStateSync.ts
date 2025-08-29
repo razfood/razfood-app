@@ -4,19 +4,19 @@
 /**
  * @file Hook soberano para sincronización de estado con parámetros de URL.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
  * @link raz.metashark.tech
  * @description Este hook es una pieza de infraestructura de UI de élite. Sincroniza
  *              bidireccionalmente un objeto de estado con los search params de la URL.
- *              Utiliza debouncing para optimizar las actualizaciones y proporciona un
- *              indicador de estado de sincronización. Es la Única Fuente de Verdad para
+ *              Utiliza debouncing selectivo para optimizar las actualizaciones y proporciona
+ *              un indicador de estado de sincronización. Es la Única Fuente de Verdad para
  *              el estado de filtros de cualquier página.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { clientLogger } from '@/lib/logger';
 
@@ -28,6 +28,7 @@ import { clientLogger } from '@/lib/logger';
 export interface UseUrlStateSyncOptions<T> {
   initialState: T;
   debounceMs?: number;
+  debounceKeys?: (keyof T)[];
 }
 
 /**
@@ -49,51 +50,88 @@ export interface UseUrlStateSyncReturn<T> {
  * @param {UseUrlStateSyncOptions<T>} options - Las opciones de configuración.
  * @returns {UseUrlStateSyncReturn<T>} Un objeto con el estado, la función para actualizarlo y un indicador de sincronización.
  */
-export function useUrlStateSync<T>({
+export function useUrlStateSync<T extends object>({
   initialState,
   debounceMs = 500,
+  debounceKeys = [],
 }: UseUrlStateSyncOptions<T>): UseUrlStateSyncReturn<T> {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [state, setState] = useState<T>(() => {
     const params = new URLSearchParams(searchParams.toString());
-    const existingState: Record<string, any> = {};
-    Object.keys(initialState as object).forEach((key) => {
+    const existingState: Partial<T> = {};
+    Object.keys(initialState).forEach((key) => {
       if (params.has(key)) {
-        existingState[key] = params.get(key);
+        (existingState as any)[key] = params.get(key);
       }
     });
+    clientLogger.trace('[useUrlStateSync] Estado inicializado desde la URL.', { initialState, existingState });
     return { ...initialState, ...existingState };
   });
 
   const [isSyncing, setIsSyncing] = useState(false);
 
-  useEffect(() => {
-    setIsSyncing(true);
-
-    const handler = setTimeout(() => {
+  const updateUrl = useCallback(
+    (currentState: T) => {
       const newParams = new URLSearchParams();
-      Object.entries(state as object).forEach(([key, value]) => {
-        if (value !== null && value !== undefined && value !== '') {
+      Object.entries(currentState).forEach(([key, value]) => {
+        if (value !== null && value !== undefined && String(value).trim() !== '') {
           newParams.set(key, String(value));
         }
       });
       const newUrl = `${pathname}?${newParams.toString()}`;
 
-      // Solo empujar si la URL ha cambiado para evitar entradas de historial innecesarias.
       if (newUrl !== `${pathname}?${searchParams.toString()}`) {
         clientLogger.trace('[useUrlStateSync] Sincronizando estado con URL.', { newUrl });
         router.push(newUrl, { scroll: false });
       }
       setIsSyncing(false);
-    }, debounceMs);
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+
+    setIsSyncing(true);
+
+    const debouncedState: Partial<T> = {};
+    const instantState: Partial<T> = {};
+
+    Object.keys(state).forEach((key) => {
+      const k = key as keyof T;
+      if (debounceKeys.includes(k)) {
+        debouncedState[k] = state[k];
+      } else {
+        instantState[k] = state[k];
+      }
+    });
+
+    // Actualiza el estado instantáneo inmediatamente si hay cambios.
+    if (Object.keys(instantState).length > 0) {
+      updateUrl({ ...initialState, ...state });
+    }
+
+    // Aplica debounce solo a las claves especificadas.
+    if (Object.keys(debouncedState).length > 0) {
+      timeoutRef.current = setTimeout(() => {
+        updateUrl({ ...initialState, ...state });
+      }, debounceMs);
+    } else {
+      setIsSyncing(false); // No hay nada que debounced, termina de sincronizar.
+    }
 
     return () => {
-      clearTimeout(handler);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
     };
-  }, [state, pathname, router, searchParams, debounceMs]);
+  }, [state, initialState, debounceMs, debounceKeys, updateUrl]);
 
   return { state, setState, isSyncing };
 }
@@ -105,12 +143,7 @@ export function useUrlStateSync<T>({
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Debounce por Clave:** A implementação atual aplica o debounce a todas as alterações de estado. Uma melhoria de élite seria permitir a especificação de `debounceKeys` nas opções, para que apenas certas chaves (como o campo de busca 'q') sejam debounced, enquanto outras (como filtros de select) atualizem a URL instantaneamente para um feedback de UI mais rápido.
- * - ((Vigente)) **Parseo de Tipos:** O estado é atualmente lido e escrito como string. Uma melhoria seria adicionar um schema de parseo opcional (ex: Zod) para converter os parâmetros da URL para os seus tipos corretos (números, booleanos) ao inicializar o estado.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Infraestrutura de UI Soberana:** Cria uma peça de lógica de UI fundamental, reutilizável e de élite que servirá como base para todas as páginas com estado filtrável, aderindo estritamente aos princípios DRY e de Atomicidade.
- * - ((Implementada)) **Sincronização Bidirecional:** O hook inicializa seu estado a partir da URL no mount e subsequentemente atualiza a URL quando o estado muda, garantindo que o estado da UI seja persistente através de recarregamentos de página e compartilhamento de links.
- * - ((Implementada)) **Otimização de Performance:** A inclusão de debouncing previne a sobrecarga do router da Next.js e evita a criação de entradas desnecessárias no histórico do navegador.
+ * - ((Vigente)) **Parseo de Tipos con Zod:** O estado é atualmente lido e escrito como string. Uma melhoria de élite seria adicionar um schema de parseo Zod opcional para converter os parâmetros da URL para os seus tipos corretos (números, booleanos) ao inicializar o estado, garantindo a integridade dos tipos.
+ * - ((Vigente)) **Manejo de Valores por Defecto:** A lógica atual remove da URL os parâmetros que correspondem ao `initialState`. Uma prop opcional `keepDefaultsInUrl?: boolean` poderia ser adicionada para controlar este comportamento, útil para URLs que precisam ser explícitas.
  */
 // src/lib/hooks/ui/useUrlStateSync.ts

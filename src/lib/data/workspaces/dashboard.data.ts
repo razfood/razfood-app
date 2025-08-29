@@ -5,7 +5,7 @@ import 'server-only';
 /**
  * @file Aparato de datos para consultas de workspaces desde el dashboard/API.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -39,7 +39,7 @@ export const getWorkspacesForUser = cache(async (userId: string): Promise<Tables
       throw error;
     }
 
-    // El resultado es un array de { workspaces: ... }, por lo que necesitamos mapearlo.
+    // El resultado es un array de { workspaces: ... | null }, por lo que necesitamos mapearlo y filtrarlo.
     return data.map((item) => item.workspaces).filter(Boolean) as Tables<'workspaces'>[];
   } catch (error) {
     logger.error(`[Data:WorkspacesDashboard] Fallo al obtener workspaces para el usuario ${userId}`, error);
@@ -48,16 +48,55 @@ export const getWorkspacesForUser = cache(async (userId: string): Promise<Tables
 });
 
 /**
+ * @public
+ * @async
+ * @function getWorkspaceByIdForMember
+ * @description Obtiene un workspace por su ID, solo si el usuario especificado es miembro.
+ * @param {string} workspaceId - El ID del workspace a obtener.
+ * @param {string} userId - El ID del usuario que debe ser miembro.
+ * @returns {Promise<Tables<'workspaces'> | null>} El workspace si se encuentra y el usuario tiene acceso, de lo contrario null.
+ */
+export const getWorkspaceByIdForMember = cache(
+  async (workspaceId: string, userId: string): Promise<Tables<'workspaces'> | null> => {
+    logger.trace(`[Cache MISS] [Data:WorkspacesDashboard] Obteniendo workspace ${workspaceId} para miembro ${userId}`);
+    try {
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from('workspaces')
+        .select('*, workspace_members!inner(user_id)')
+        .eq('id', workspaceId)
+        .eq('workspace_members.user_id', userId)
+        .single();
+
+      if (error) {
+        // PGRST116: "exact one row expected, but 0 rows returned" -> Resultado esperado si no hay acceso o no existe.
+        if (error.code !== 'PGRST116') {
+          throw error;
+        }
+        return null;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { workspace_members, ...workspaceData } = data;
+      return workspaceData as Tables<'workspaces'>;
+    } catch (error) {
+      logger.error(
+        `[Data:WorkspacesDashboard] Fallo al obtener workspace ${workspaceId} para miembro ${userId}`,
+        error,
+      );
+      return null;
+    }
+  },
+);
+
+/**
  * @module workspaces-dashboard-data
  * @description Capa de acceso a datos para workspaces en contextos autenticados.
  *
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Paginação:** Para usuários que pertençam a um grande número de workspaces, será necessário adicionar paginação a esta consulta.
- * - ((Vigente)) **Obtenção por ID com Verificação de Membro:** Criar uma função `getWorkspaceByIdForMember(workspaceId, userId)` que obtenha um único workspace apenas se o usuário for membro, para ser usada pelo resolver `workspace(id)`.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Lógica de Dados para API:** Cria a primeira peça de lógica de dados real necessária para que o resolver `myWorkspaces` da API de GraphQL funcione.
+ * - ((Vigente)) **Paginação para `getWorkspacesForUser`:** Para usuários que pertençam a um grande número de workspaces, será necessário adicionar paginação a esta consulta para evitar a sobrecarga do cliente.
+ * - ((Vigente)) **Função de Batch para Dataloader:** Criar uma função `getWorkspacesByIds(ids: string[])` que obtenha múltiplos workspaces em uma única consulta, para ser consumida por um futuro `workspaceLoader` no contexto GraphQL.
  */
 // src/lib/data/workspaces/dashboard.data.ts

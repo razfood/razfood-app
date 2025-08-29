@@ -5,24 +5,24 @@ import 'server-only';
 /**
  * @file Server Action atómica y transaccional para la creación de nuevos pedidos.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
  * @link raz.metashark.tech
  * @description Esta Server Action es el núcleo del flujo transaccional de Restoralia.
  *              Encapsula la lógica de negocio para crear un nuevo pedido, validando
- *              los datos, recalculando totales en el servidor, e insertando los
- *              registros correspondientes en las tablas `orders` y `order_items`
- *              de forma segura.
+ *              los datos, recalculando totales en el servidor para máxima seguridad,
+ *              e insertando los registros correspondientes en las tablas `orders` y
+ *              `order_items` de forma segura.
  */
 
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
 import { createPersistentErrorLog, createAuditLog } from '@/lib/actions/_helpers/error-log.helper';
-import { type ActionResult } from '@/lib/validators/common.schemas';
-import { type Tables, type TablesInsert } from '@/lib/types/database';
+import { type ActionResult } from '@/lib/validators';
+import { type TablesInsert } from '@/lib/types/database';
 import type { CartItem } from '@/stores/useCartStore';
 
 const CreateOrderClientSchema = z.object({
@@ -35,7 +35,9 @@ const CreateOrderClientSchema = z.object({
  * @public
  * @async
  * @function createOrderAction
- * @description Crea un nuevo pedido con sus ítems correspondientes.
+ * @description Crea un nuevo pedido con sus ítems correspondientes. Recalcula el total en el servidor.
+ * @param {FormData} formData - Datos del formulario que deben cumplir con `CreateOrderClientSchema`.
+ * @returns {Promise<ActionResult<{ orderId: string }, { errorId: string }>>} El resultado de la operación.
  */
 export async function createOrderAction(
   formData: FormData,
@@ -67,10 +69,12 @@ export async function createOrderAction(
 
     if (productsError) throw productsError;
 
+    // Recalculo de seguridad en el servidor
     const serverCalculatedTotal = cartItems.reduce((total, cartItem) => {
-      const dbProduct = productsFromDb.find((p: { id: string; price: number }) => p.id === cartItem.id);
-      if (!dbProduct) throw new Error(`Producto con ID ${cartItem.id} no encontrado.`);
-      return total + dbProduct.price * cartItem.quantity;
+      const dbProduct = productsFromDb.find((p) => p.id === cartItem.id);
+      if (!dbProduct) throw new Error(`Producto con ID ${cartItem.id} no encontrado en la base de datos.`);
+      // Utiliza el precio de la DB, no del cliente.
+      return total + Number(dbProduct.price) * cartItem.quantity;
     }, 0);
 
     const orderData: TablesInsert<'orders'> = {
@@ -78,7 +82,7 @@ export async function createOrderAction(
       site_id: siteId,
       customer_id: user?.id ?? null,
       total: serverCalculatedTotal,
-      subtotal: serverCalculatedTotal,
+      subtotal: serverCalculatedTotal, // Asume que no hay impuestos por ahora
       tax: 0,
       status: 'pending',
     };
@@ -88,12 +92,12 @@ export async function createOrderAction(
     if (orderError) throw orderError;
 
     const orderItemsData: TablesInsert<'order_items'>[] = cartItems.map((item) => {
-      const dbProduct = productsFromDb.find((p: { id: string; price: number }) => p.id === item.id);
+      const dbProduct = productsFromDb.find((p) => p.id === item.id);
       return {
         order_id: newOrder.id,
         product_id: item.id,
         quantity: item.quantity,
-        price_at_purchase: dbProduct!.price,
+        price_at_purchase: Number(dbProduct!.price), // Guarda el precio en el momento de la compra
       };
     });
 
@@ -103,7 +107,7 @@ export async function createOrderAction(
     logger.info(`[Action:CreateOrder] Pedido ${newOrder.id} creado con éxito.`);
 
     await createAuditLog('order.created', {
-      userId: user?.id || 'system',
+      userId: user?.id || 'system-anonymous',
       targetEntityId: newOrder.id,
       metadata: { total: serverCalculatedTotal, items: cartItems.length, workspaceId },
     });
@@ -125,12 +129,8 @@ export async function createOrderAction(
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Transaccionalidad con RPC:** A lógica atual de múltiplas inserções sequenciais não é atômica. A melhoria de élite mais crítica é mover toda esta lógica para uma única função de banco de dados PostgreSQL (`CREATE OR REPLACE FUNCTION create_new_order...`) e invocar essa função via `.rpc()` do Supabase.
- * - ((Vigente)) **Integración con Pagos (Stripe):** Antes de inserir na base de dados, esta ação deve criar um `PaymentIntent` com o provedor de pagamentos. O `client_secret` do `PaymentIntent` seria retornado ao cliente para que ele possa completar o pagamento.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Resolução de Erros de Compilação:** Corrigidas todas as importações (`TS2307`, `TS2305`) e adicionado tipado explícito (`TS7006`), tornando a ação compilável e funcional.
- * - ((Implementada)) **Alinhamento de Schema:** O schema de Zod foi ajustado para refletir a estrutura de dados real enviada pelo cliente (um `JSON.stringify` do carrinho).
- * - ((Implementada)) **Segurança de Tipos:** A importação do tipo `CartItem` do `useCartStore` garante a consistência do contrato de dados entre o cliente e o servidor.
+ * - ((Vigente)) **Transaccionalidad con RPC:** A lógica atual de múltiplas inserções sequenciais não é atômica. A melhoria de élite mais crítica é mover toda esta lógica para uma única função de banco de dados PostgreSQL (`CREATE OR REPLACE FUNCTION create_new_order...`) e invocar essa função via `.rpc()` do Supabase para garantir atomicidade.
+ * - ((Vigente)) **Integración con Pagos (Stripe):** Antes de inserir na base de dados, esta ação deve criar um `PaymentIntent` com o provedor de pagamentos. O `client_secret` do `PaymentIntent` seria retornado ao cliente para que ele possa completar o pagamento no frontend.
+ * - ((Vigente)) **Cálculo de Impostos:** Adicionar lógica para calcular impostos (`tax`) com base na localização do restaurante ou do cliente, e refletir isso no `total`.
  */
 // src/lib/actions/orders/create.action.ts

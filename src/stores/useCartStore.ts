@@ -4,7 +4,7 @@
 /**
  * @file Store de Zustand soberano para la gestión del estado del carrito de compras.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 2.1.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -19,9 +19,12 @@ import { clientLogger } from '@/lib/logger';
 import type { Tables } from '@/lib/types/database';
 
 /**
+ * @public
  * @interface CartItem
  * @description Contrato de datos para un ítem dentro del carrito. Extiende el tipo
  *              canónico de la tabla 'products' y añade la propiedad 'quantity'.
+ *              Esta herencia es la solución a la causa raíz de los errores TS2339,
+ *              una vez que los tipos de la DB son generados correctamente.
  */
 export interface CartItem extends Tables<'products'> {
   quantity: number;
@@ -48,7 +51,7 @@ export interface CartState {
  */
 const computeTotals = (items: CartItem[]) => {
   const totalItems = items.reduce((total, item) => total + item.quantity, 0);
-  const totalPrice = items.reduce((total, item) => total + item.price * item.quantity, 0);
+  const totalPrice = items.reduce((total, item) => total + Number(item.price) * item.quantity, 0);
   return { totalItems, totalPrice };
 };
 
@@ -105,10 +108,7 @@ export const useCartStore = create<CartState>((set, get) => ({
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Persistência no `localStorage`:** Proponho, como próxima melhoria crítica, utilizar o middleware `persist` do Zustand para salvar o estado do carrinho no `localStorage`. Isso garantirá que o carrinho do cliente não seja perdido se ele recarregar a página.
- * - ((Vigente)) **Gestão de Modificadores de Produto:** A estrutura atual de `CartItem` é simples. Proponho estendê-la para incluir um array `modifiers`. O identificador de um item no carrinho (`cartItemId`) precisará ser um hash composto pelo `productId` e os modificadores selecionados.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Reparação de Contrato de Dados (TS2339):** O tipo `CartItem` foi corrigido para estender `Tables<'products'>`, alinhando-o com a fonte de verdade da base de dados e resolvendo a cascata de erros de tipo nos componentes consumidores.
+ * - ((Vigente)) **Persistência no `localStorage`:** Proponho, como próxima melhoria crítica, utilizar o middleware `persist` do Zustand para salvar o estado do carrinho no `localStorage`. Isso garantirá que o carrinho do cliente não seja perdido se ele recarregar a página ou fechar o navegador.
+ * - ((Vigente)) **Gestão de Modificadores de Produto:** A estrutura atual de `CartItem` é simples. Proponho estendê-la para incluir um array `modifiers`. O identificador de um item no carrinho (`cartItemId`) precisará ser um hash composto pelo `productId` e os modificadores selecionados para garantir a unicidade.
  */
 // src/stores/useCartStore.ts

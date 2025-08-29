@@ -5,7 +5,7 @@ import 'server-only';
 /**
  * @file Server Action atómica para actualizar el estado de un pedido.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -22,13 +22,22 @@ import { z } from 'zod';
 import { requireWorkspacePermission } from '@/lib/auth/user-permissions';
 import { logger } from '@/lib/logger';
 import { createClient } from '@/lib/supabase/server';
-import { type ActionResult } from '@/lib/validators/common.schemas';
+import { type ActionResult } from '@/lib/validators';
 import { createAuditLog, createPersistentErrorLog } from '@/lib/actions/_helpers/error-log.helper';
-import { order_status } from '@/lib/types/database/enums';
+import { type Enums } from '@/lib/types/database';
+
+const orderStatusEnumValues = z.enum([
+  'pending',
+  'confirmed',
+  'preparing',
+  'out_for_delivery',
+  'delivered',
+  'cancelled',
+]);
 
 const UpdateOrderStatusSchema = z.object({
   orderId: z.string().uuid('ID de pedido inválido.'),
-  status: z.enum(order_status, { invalid_type_error: 'Estado de pedido inválido.' }),
+  status: orderStatusEnumValues,
 });
 
 /**
@@ -63,11 +72,13 @@ export async function updateOrderStatusAction(formData: FormData): Promise<Actio
       .single();
 
     if (fetchError || !order) {
+      logger.warn(`[Action:UpdateOrderStatus] Pedido no encontrado: ${orderId}`);
       return { success: false, error: 'error_order_not_found' };
     }
 
     const permissionCheck = await requireWorkspacePermission(order.workspace_id, ['owner', 'admin', 'member']);
     if (!permissionCheck.success) {
+      // El helper ya loguea la razón específica (unauthenticated, forbidden)
       return { success: false, error: 'error_permission_denied' };
     }
     const { user } = permissionCheck.data;
@@ -108,12 +119,8 @@ export async function updateOrderStatusAction(formData: FormData): Promise<Actio
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Máquina de Estados Finita (FSM):** A validação atual permite qualquer transição de estado. A implementação de élite seria validar a transição de estado. Por exemplo, um pedido não pode passar de 'pending' para 'delivered' sem passar por 'preparing'.
- * - ((Vigente)) **Notificaciones en Tiempo Real:** Após a atualização do estado, esta ação deveria inserir um evento em uma tabela `notifications`. O cliente (dashboard) estaria escutando essa tabela via Supabase Realtime para notificar outros usuários.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Resolução de Erros de Compilação:** Corrigidas todas as importações (`TS2307`, `TS2305`), tornando a ação compilável e funcional.
- * - ((Implementada)) **Validação de Schema de Élite:** O schema de Zod agora consome diretamente o ENUM `order_status` do nosso tipo de base de dados, garantindo que apenas estados válidos possam ser processados e eliminando a duplicação de constantes.
- * - ((Implementada)) **Lógica de Autorização Robusta:** A ação agora utiliza o helper `requireWorkspacePermission`, garantindo que a lógica de segurança seja centralizada e consistente.
+ * - ((Vigente)) **Máquina de Estados Finita (FSM):** A validação atual permite qualquer transição de estado (ex: de 'delivered' para 'pending'). A implementação de élite seria validar a transição de estado. Por exemplo, um pedido não pode passar de 'pending' para 'delivered' sem passar por 'preparing'. Isso deve ser implementado como uma função de validação antes da atualização.
+ * - ((Vigente)) **Notificaciones en Tiempo Real:** Após a atualização do estado, esta ação deveria inserir um evento em uma tabela `notifications` que seria escutada pelo cliente (dashboard) via Supabase Realtime para notificar outros usuários da mudança, além da revalidação do path.
+ * - ((Vigente)) **Transaccionalidad con RPC:** Mover a lógica de atualização e criação de log de auditoria para uma única função RPC de PostgreSQL para garantir a atomicidade completa da operação.
  */
 // src/lib/actions/orders/update-status.action.ts

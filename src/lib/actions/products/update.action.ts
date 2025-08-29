@@ -1,8 +1,11 @@
 // src/lib/actions/products/update.action.ts
+'use server';
+import 'server-only';
+
 /**
  * @file Server Action atómica para la actualización de productos.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -12,17 +15,14 @@
  *              pertenece el producto, sanea y valida los datos de entrada, y maneja
  *              actualizaciones parciales de forma segura.
  */
-'use server';
-import 'server-only';
 
 import { revalidatePath } from 'next/cache';
-import { ZodError } from 'zod';
 
 import { requireSitePermission } from '@/lib/auth/user-permissions';
 import { logger } from '@/lib/logger';
 import { createClient } from '@/lib/supabase/server';
 import { type ActionResult, UpdateProductClientSchema } from '@/lib/validators';
-import { createAuditLog, createPersistentErrorLog } from '../_helpers';
+import { createAuditLog, createPersistentErrorLog } from '@/lib/actions/_helpers/error-log.helper';
 
 /**
  * @public
@@ -47,8 +47,8 @@ export async function updateProductAction(formData: FormData): Promise<ActionRes
     }
 
     const { productId, ...updateData } = validation.data;
+    const supabase = await createClient();
 
-    const supabase = createClient();
     const { data: product, error: fetchError } = await supabase
       .from('products')
       .select('site_id')
@@ -56,6 +56,7 @@ export async function updateProductAction(formData: FormData): Promise<ActionRes
       .single();
 
     if (fetchError || !product) {
+      logger.warn(`[Action:UpdateProduct] Producto no encontrado: ${productId}`);
       return { success: false, error: 'error_product_not_found' };
     }
 
@@ -72,19 +73,17 @@ export async function updateProductAction(formData: FormData): Promise<ActionRes
       .update({ ...updateData, updated_at: new Date().toISOString() })
       .eq('id', productId);
 
-    if (updateError) {
-      throw updateError;
-    }
+    if (updateError) throw updateError;
 
     logger.info(`[Action:UpdateProduct] Producto actualizado con éxito: ${productId}`);
 
     await createAuditLog('product.updated', {
       userId: user.id,
       targetEntityId: productId,
-      metadata: { changes: updateData },
+      metadata: { changes: updateData, siteId: product.site_id },
     });
 
-    revalidatePath(`/dashboard/sites/${product.site_id}/campaigns`);
+    revalidatePath(`/dashboard/sites/${product.site_id}/products`);
 
     return { success: true, data: undefined };
   } catch (error) {
@@ -95,6 +94,7 @@ export async function updateProductAction(formData: FormData): Promise<ActionRes
     return { success: false, error: 'error_unexpected', data: { errorId } };
   }
 }
+
 /**
  * @module update-product-action
  * @description Server Action para la actualización de productos.

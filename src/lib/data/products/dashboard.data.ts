@@ -5,13 +5,14 @@ import 'server-only';
 /**
  * @file Aparato de datos atómico para consultas de productos en contextos autenticados.
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
  * @link raz.metashark.tech
  * @description Esta es la Única Fuente de Verdad para obtener datos de productos
  *              para el dashboard o la API, donde los permisos ya han sido validados.
+ *              Incluye lógica de paginación y búsqueda.
  */
 
 import { cache } from 'react';
@@ -23,25 +24,47 @@ import type { Tables } from '@/lib/types/database';
  * @public
  * @async
  * @function getProductsForSite
- * @description Obtiene todos los productos (ítems de menú) para un sitio específico.
+ * @description Obtiene una página de productos para un sitio específico, con soporte para búsqueda.
+ * @param {string} siteId - El ID del sitio.
+ * @param {number} page - El número de página a obtener.
+ * @param {number} limit - El número de ítems por página.
+ * @param {string} [query] - El término de búsqueda opcional.
+ * @returns {Promise<{ products: Tables<'products'>[]; totalCount: number }>} Un objeto con los productos de la página y el conteo total.
  */
-export const getProductsForSite = cache(async (siteId: string): Promise<Tables<'products'>[]> => {
-  logger.trace(`[Cache MISS] [Data:ProductsDashboard] Obteniendo productos para sitio: ${siteId}`);
-  try {
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('site_id', siteId)
-      .order('created_at', { ascending: true });
+export const getProductsForSite = cache(
+  async (
+    siteId: string,
+    page: number,
+    limit: number,
+    query?: string,
+  ): Promise<{ products: Tables<'products'>[]; totalCount: number }> => {
+    logger.trace(`[Cache MISS] [Data:ProductsDashboard] Obteniendo productos para sitio: ${siteId}`, {
+      page,
+      limit,
+      query,
+    });
+    try {
+      const supabase = await createClient();
+      const from = (page - 1) * limit;
+      const to = from + limit - 1;
 
-    if (error) throw error;
-    return data || [];
-  } catch (error) {
-    logger.error(`[Data:ProductsDashboard] Fallo al obtener productos para el sitio ${siteId}`, error);
-    return [];
-  }
-});
+      let queryBuilder = supabase.from('products').select('*', { count: 'exact' }).eq('site_id', siteId);
+
+      if (query) {
+        queryBuilder = queryBuilder.ilike('name', `%${query}%`);
+      }
+
+      const { data, error, count } = await queryBuilder.order('created_at', { ascending: false }).range(from, to);
+
+      if (error) throw error;
+
+      return { products: data || [], totalCount: count || 0 };
+    } catch (error) {
+      logger.error(`[Data:ProductsDashboard] Fallo al obtener productos para el sitio ${siteId}`, error);
+      return { products: [], totalCount: 0 };
+    }
+  },
+);
 
 /**
  * @public
@@ -89,9 +112,7 @@ export const getProductByIdForMember = cache(
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Paginação:** Para menús com um grande número de produtos, será crucial adicionar paginação à consulta `getProductsForSite`.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Consulta com Autorização Aninhada:** A nova função `getProductByIdForMember` utiliza um `inner join` implícito aninhado do Supabase (`sites!inner(workspace_members!inner(...))`) para combinar a obtenção de dados e a autorização em uma única e eficiente consulta.
+ * - ((Vigente)) **Filtros y Ordenamiento Avanzados:** Estender a função `getProductsForSite` para aceitar parâmetros `status` e `sortBy`. Isso permitirá que a UI filtre produtos por seu estado (disponível, esgotado) e ordene por nome ou preço, movendo essa lógica para a consulta da base de dados para máxima eficiência.
+ * - ((Vigente)) **Função de Batch para Dataloader:** Criar uma função `getProductsByIds(ids: string[])` para ser consumida por um futuro `productLoader` no contexto GraphQL, otimizando a resolução de `order_items`.
  */
 // src/lib/data/products/dashboard.data.ts

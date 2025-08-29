@@ -1,0 +1,219 @@
+// prisma/schema.prisma
+// @file Schema de Prisma para la base de datos de razfood.
+// @author Prisma CLI (Generado) | L.I.A. Legacy (Revisado y Documentado)
+// @version 1.1.0
+// @date 2025-08-28
+// @description Este archivo es la Única Fuente de Verdad para el schema de la base de datos.
+//              Define los modelos de datos, sus relaciones y tipos. Es consumido por
+//              Prisma Client para generar una API de acceso a datos tipo-segura.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model profiles {
+  id                        String             @id @db.Uuid
+  email                     String             @unique
+  full_name                 String?
+  avatar_url                String?
+  app_role                  app_role           @default(user)
+  plan_type                 plan_type          @default(free)
+  has_completed_onboarding  Boolean            @default(false)
+  created_at                DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime?          @db.Timestamptz(6)
+  invitations               invitations[]
+  orders                    orders[]
+  products                  products[]
+  sites                     sites[]
+  workspaces                workspaces[]
+  workspace_members         workspace_members[]
+  visitor_logs              visitor_logs[]
+}
+
+model workspaces {
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name              String
+  owner_id          String              @db.Uuid
+  icon              String?
+  created_at        DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?           @db.Timestamptz(6)
+  profiles          profiles            @relation(fields: [owner_id], references: [id], onDelete: Restrict)
+  invitations       invitations[]
+  orders            orders[]
+  sites             sites[]
+  workspace_members workspace_members[]
+}
+
+model workspace_members {
+  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspace_id String         @db.Uuid
+  user_id      String         @db.Uuid
+  role         workspace_role
+  created_at   DateTime       @default(now()) @db.Timestamptz(6)
+  profiles     profiles       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  workspaces   workspaces     @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, user_id])
+}
+
+model invitations {
+  id            String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspace_id  String            @db.Uuid
+  invited_by    String            @db.Uuid
+  invitee_email String
+  role          workspace_role
+  status        invitation_status @default(pending)
+  created_at    DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?         @db.Timestamptz(6)
+  profiles      profiles          @relation(fields: [invited_by], references: [id], onDelete: Cascade)
+  workspaces    workspaces        @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+
+  @@unique([workspace_id, invitee_email])
+}
+
+model sites {
+  id            String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspace_id  String      @db.Uuid
+  owner_id      String?     @db.Uuid
+  name          String
+  subdomain     String?     @unique
+  custom_domain String?     @unique
+  icon          String?
+  description   String?
+  status        site_status @default(draft)
+  created_at    DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?   @db.Timestamptz(6)
+  profiles      profiles?   @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+  workspaces    workspaces  @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  orders        orders[]
+  products      products[]
+}
+
+model products {
+  id                String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  site_id           String         @db.Uuid
+  created_by        String?        @db.Uuid
+  name              String
+  slug              String
+  description       String?
+  image_url         String?
+  price             Decimal        @db.Decimal(10, 2)
+  status            product_status @default(available)
+  created_at        DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?      @db.Timestamptz(6)
+  profiles          profiles?      @relation(fields: [created_by], references: [id], onDelete: SetNull)
+  sites             sites          @relation(fields: [site_id], references: [id], onDelete: Cascade)
+  order_items       order_items[]
+
+  @@unique([site_id, slug])
+}
+
+model orders {
+  id                String        @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  site_id           String?       @db.Uuid
+  workspace_id      String        @db.Uuid
+  customer_id       String?       @db.Uuid
+  status            order_status  @default(pending)
+  subtotal          Decimal       @db.Decimal(10, 2)
+  tax               Decimal       @db.Decimal(10, 2)
+  total             Decimal       @db.Decimal(10, 2)
+  delivery_address  Json?
+  payment_intent_id String?       @unique
+  created_at        DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?     @db.Timestamptz(6)
+  profiles          profiles?     @relation(fields: [customer_id], references: [id], onDelete: SetNull)
+  sites             sites?        @relation(fields: [site_id], references: [id], onDelete: SetNull)
+  workspaces        workspaces    @relation(fields: [workspace_id], references: [id], onDelete: Cascade)
+  order_items       order_items[]
+}
+
+model order_items {
+  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  order_id          String   @db.Uuid
+  product_id        String?  @db.Uuid
+  quantity          Int
+  price_at_purchase Decimal  @db.Decimal(10, 2)
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  orders            orders   @relation(fields: [order_id], references: [id], onDelete: Cascade)
+  products          products? @relation(fields: [product_id], references: [id], onDelete: SetNull)
+}
+
+model visitor_logs {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  session_id      String   @db.Uuid
+  customer_id     String?  @db.Uuid
+  fingerprint     String
+  ip_address      String?  @db.Inet
+  geo_data        Json?
+  user_agent      String?
+  utm_params      Json?
+  referrer        String?
+  landing_page    String?
+  browser_context Json?
+  is_bot          Boolean  @default(false)
+  created_at      DateTime @default(now()) @db.Timestamptz(6)
+  profiles        profiles? @relation(fields: [customer_id], references: [id], onDelete: SetNull)
+}
+
+enum app_role {
+  user
+  admin
+  developer
+}
+
+enum plan_type {
+  free
+  basic
+  pro
+  enterprise
+}
+
+enum workspace_role {
+  owner
+  admin
+  member
+}
+
+enum order_status {
+  pending
+  confirmed
+  preparing
+  out_for_delivery
+  delivered
+  cancelled
+}
+
+enum product_status {
+  available
+  unavailable
+  sold_out
+}
+
+enum invitation_status {
+  pending
+  accepted
+  declined
+  expired
+}
+
+enum site_status {
+  draft
+  published
+  archived
+}
+
+// @module prisma-schema
+// @description SSoT declarativa para el schema de la base de datos.
+//
+// @section Melhora Contínua
+//
+// @subsection Melhorias Futuras
+// - ((Vigente)) **Modelos de Auditoría y Logs:** Adicionar los modelos para las tablas `audit_logs` y `logs` para completar el schema y permitir el acceso tipo-seguro a través del cliente Prisma.
+// - ((Vigente)) **Definición de Índices:** Adicionar explícitamente índices (`@@index([field])`) a los modelos para campos frecuentemente consultados (ej. `workspace_id` en `orders`), mejorando el rendimiento de las consultas y haciendo que la optimización de la base de datos sea declarativa.
+// prisma/schema.prisma

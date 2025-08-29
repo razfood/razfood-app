@@ -100,3 +100,25 @@ Subscription riderLocation(orderId: ID!): Suscripción del repartidor para envia
 Subscription chatMessages(chatRoomId: ID!): Se suscribe a nuevos mensajes en una sala de chat.
 Mutation sendMessage(chatRoomId: ID!, content: String!): Envía un mensaje a una sala de chat.
 Query getChatHistory(chatRoomId: ID!): Obtiene el historial de mensajes de una sala.
+
+### 4. Stack Tecnológico Canónico
+*   **Framework:** Next.js (App Router)
+*   **Lenguaje:** TypeScript
+*   **Base de Datos y Auth:** Supabase (PostgreSQL, Auth RLS, Realtime)
+*   **Capa de Datos (ORM):** Prisma
+*   **UI:** Tailwind CSS, shadcn/ui, Framer Motion
+*   **Gestión de Estado (Cliente):** Zustand
+*   **Internacionalización:** next-intl
+*   **Pruebas:** Vitest (Unit/Integration), Playwright (E2E)
+*   **Observabilidad:** El sistema de logger que hemos definido, con Sentry en producción.
+
+# Blueprint de API de Élite: GraphQL para "razfood"
+
+## 1. Arquitectura de la API
+
+*   **Endpoint:** Único en `/api/graphql`.
+...
+*   **Autorización:** La lógica de permisos se implementará en dos capas:
+    1.  **Nivel de Resolver:** Cada resolver utilizará la capa de datos de Prisma para consultar la base de datos, la cual está protegida por políticas RLS.
+    2.  **Nivel de Base de Datos:** Las políticas de RLS de Supabase actúan como una segunda línea de defensa infalible.
+*   **Optimización (Prevención N+1):** El contexto de Apollo inicializará una instancia de `Dataloader` para cada entidad relacional. Las funciones de batch de estos Dataloaders serán implementadas utilizando las capacidades de consulta optimizada de **Prisma Client**. Los resolvers de campos anidados **siempre** utilizarán el Dataloader correspondiente.

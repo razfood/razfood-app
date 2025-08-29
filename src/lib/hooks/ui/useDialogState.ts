@@ -4,7 +4,7 @@
 /**
  * @file Hook soberano para gestionar el estado de componentes modales (Dialog, Sheet, etc.).
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -16,10 +16,16 @@
  */
 
 import { useState, useCallback } from 'react';
+import { clientLogger } from '@/lib/logger';
+
+interface UseDialogStateProps {
+  initialState?: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
+}
 
 interface UseDialogStateReturn {
   isOpen: boolean;
-  setIsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  setIsOpen: (isOpen: boolean) => void;
   open: () => void;
   close: () => void;
   toggle: () => void;
@@ -28,16 +34,39 @@ interface UseDialogStateReturn {
 /**
  * @public
  * @function useDialogState
- * @description Encapsula la lógica de estado para un componente modal.
- * @param {boolean} [initialState=false] - El estado inicial de visibilidad.
+ * @description Encapsula la lógica de estado para un componente modal, proveyendo una API semántica y un callback para cambios de estado.
+ * @param {UseDialogStateProps} [props={}] - Propiedades de configuración opcionales.
  * @returns {UseDialogStateReturn} Un objeto con el estado y los manejadores para controlar un diálogo.
  */
-export function useDialogState(initialState = false): UseDialogStateReturn {
-  const [isOpen, setIsOpen] = useState(initialState);
+export function useDialogState({ initialState = false, onOpenChange }: UseDialogStateProps = {}): UseDialogStateReturn {
+  const [isOpen, _setIsOpen] = useState(initialState);
 
-  const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
-  const toggle = useCallback(() => setIsOpen((prev) => !prev), []);
+  const setIsOpen = useCallback(
+    (value: boolean) => {
+      _setIsOpen(value);
+      onOpenChange?.(value);
+    },
+    [onOpenChange],
+  );
+
+  const open = useCallback(() => {
+    clientLogger.trace('[useDialogState] Abriendo diálogo.');
+    setIsOpen(true);
+  }, [setIsOpen]);
+
+  const close = useCallback(() => {
+    clientLogger.trace('[useDialogState] Cerrando diálogo.');
+    setIsOpen(false);
+  }, [setIsOpen]);
+
+  const toggle = useCallback(() => {
+    clientLogger.trace('[useDialogState] Alternando estado del diálogo.');
+    _setIsOpen((prev) => {
+      const newValue = !prev;
+      onOpenChange?.(newValue);
+      return newValue;
+    });
+  }, [onOpenChange]);
 
   return { isOpen, setIsOpen, open, close, toggle };
 }
@@ -49,11 +78,7 @@ export function useDialogState(initialState = false): UseDialogStateReturn {
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Callback `onOpenChange`:** Adicionar um callback opcional `onOpenChange?: (isOpen: boolean) => void` como parâmetro, que seria invocado sempre que o estado mude. Isso permitiria que componentes pais executassem efeitos colaterais em resposta à mudança de estado do diálogo.
  * - ((Vigente)) **Integração com Parâmetros de URL:** Criar uma variante deste hook, `useUrlDialogState(paramName: string)`, que sincronize o estado `isOpen` com um parâmetro na URL (ex: `?modal=create-product`). Isso permitiria que modais pudessem ser abertos diretamente através de um link, uma característica de UX de élite.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Resolução de Dependência Crítica (TS2307):** A criação deste hook resolve uma dependência fundamental que impedia a compilação do módulo `campaigns-columns`.
- * - ((Implementada)) **API Semântica (DX):** Fornece uma API mais clara e menos propensa a erros (`open`, `close`) do que usar `useState(false)` diretamente, melhorando a experiência do desenvolvedor.
+ * - ((Vigente)) **Cierre Automático en Navegación:** Criar um novo hook `useAutoCloseDialogOnNavigate` que consuma este hook e a navegação de Next.js para fechar automaticamente qualquer diálogo aberto quando o usuário navegar para uma nova rota, prevenindo estados de UI inconsistentes.
  */
 // src/lib/hooks/ui/useDialogState.ts

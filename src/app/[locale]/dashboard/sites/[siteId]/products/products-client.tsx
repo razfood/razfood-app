@@ -1,8 +1,10 @@
 // src/app/[locale]/dashboard/sites/[siteId]/products/products-client.tsx
+'use client';
+
 /**
  * @file Orquestador de UI de élite para la página de gestión de productos.
  * @author Raz Podestá - MetaShark Tech
- * @version 1.0.0
+ * @version 2.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -11,17 +13,15 @@
  *              el hook soberano `useProductsPage`. Su única responsabilidad es ensamblar
  *              la UI, delegando toda la lógica de estado y acciones al hook.
  */
-'use client';
 
 import React from 'react';
-import { useFormatter, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 
 import { useProductsPage, type UseProductsPageProps } from '@/lib/hooks/useProductsPage';
-import { PaginatedDataTable } from '@/components/shared/PaginatedDataTable';
+import { ProductsDataTable } from '@/components/products/ProductsDataTable';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { ProductsPageHeader } from '@/components/products/ProductsPageHeader';
-import { getProductsColumns } from '@/components/products/products-columns';
-import { clientLogger } from '@/lib/logging';
+import { clientLogger } from '@/lib/logger';
 
 /**
  * @public
@@ -41,32 +41,15 @@ export function ProductsClient(props: UseProductsPageProps): React.ReactElement 
     mutatingId,
     searchTerm,
     setSearchTerm,
-    // Aquí se recibirán los filtros y ordenamiento en el futuro
     handleCreateProduct,
     handleDeleteProduct,
   } = useProductsPage(props);
 
-  const tDialogs = useTranslations('Dialogs');
-
-  const columns = React.useMemo(
-    () =>
-      getProductsColumns({
-        t,
-        tDialogs,
-        onDelete: handleDeleteProduct,
-        isPending,
-        mutatingId,
-      }),
-    [t, tDialogs, handleDeleteProduct, isPending, mutatingId],
-  );
+  const isCreatePending = isPending && (mutatingId?.startsWith('optimistic-') ?? false);
 
   return (
     <div className="flex flex-col gap-6">
-      <ProductsPageHeader
-        site={props.site}
-        onCreateProduct={handleCreateProduct}
-        isCreatePending={isPending && (mutatingId?.startsWith('optimistic-') ?? false)}
-      />
+      <ProductsPageHeader site={props.site} onCreateProduct={handleCreateProduct} isCreatePending={isCreatePending} />
       <div className="w-full md:w-1/3">
         <SearchInput
           placeholder={t('search.placeholder')}
@@ -76,15 +59,16 @@ export function ProductsClient(props: UseProductsPageProps): React.ReactElement 
           isLoading={isSyncing}
         />
       </div>
-      <PaginatedDataTable
-        columns={columns}
-        data={products}
-        noResultsText={t('table.empty_state')}
-        page={props.page}
+      <ProductsDataTable
+        products={products}
         totalCount={props.totalCount}
+        page={props.page}
         limit={props.limit}
         basePath={`/dashboard/sites/${props.site.id}/products`}
         searchQuery={searchTerm}
+        onDelete={handleDeleteProduct}
+        isPending={isPending}
+        mutatingId={mutatingId}
       />
     </div>
   );
@@ -97,6 +81,6 @@ export function ProductsClient(props: UseProductsPageProps): React.ReactElement 
  *
  * @subsection Melhorias Futuras
  * - ((Vigente)) **Contexto de Página (`ProductsPageContext`):** Proponho, para uma arquitetura de élite e para eliminar completamente o "prop drilling", que o valor de retorno do hook `useProductsPage` seja fornecido através de um `ProductsPageContext`. Isso permitiria que componentes filhos, como `ProductsPageHeader`, consumissem o estado e as ações diretamente, sem a necessidade de passar um grande número de props.
- * - ((Vigente)) **Conexão de Filtros e Ordenação:** Proponho, como próximo passo lógico, conectar os estados `statusFilter` e `sortBy` do hook `useProductsPage` ao `ProductsPageHeader` e à factoría `getProductsColumns` para ativar a funcionalidade completa de filtragem e ordenação na UI.
+ * - ((Vigente)) **Esqueleto de Carga de Alta Fidelidade:** O componente `loading.tsx` atual para esta página é genérico. Proponho criar um esqueleto de alta fidelidade que simule a estrutura exata desta UI (`Header`, `SearchInput`, `DataTable`) para uma UX de carregamento superior.
  */
 // src/app/[locale]/dashboard/sites/[siteId]/products/products-client.tsx

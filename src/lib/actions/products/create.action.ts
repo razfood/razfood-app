@@ -5,7 +5,7 @@ import 'server-only';
 /**
  * @file Server Action atómica para la creación de nuevos productos (ítems de menú).
  * @author Raz Podestá - MetaShark Tech
- * @version 2.0.0
+ * @version 3.0.0
  * @date 2025-08-28
  * @copyright MetaShark Tech
  * @license MIT
@@ -19,9 +19,9 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { logger } from '@/lib/logger';
-import { slugify } from '@/lib/utils/text';
+import { slugify } from '@/lib/utils';
 import { createAuditLog, createPersistentErrorLog } from '@/lib/actions/_helpers/error-log.helper';
-import { type ActionResult } from '@/lib/validators/common.schemas';
+import { type ActionResult } from '@/lib/validators';
 import { type TablesInsert } from '@/lib/types/database';
 import { CreateProductClientSchema } from '@/lib/validators/product.schemas';
 import { requireSitePermission } from '@/lib/auth/user-permissions';
@@ -30,7 +30,9 @@ import { requireSitePermission } from '@/lib/auth/user-permissions';
  * @public
  * @async
  * @function createProductAction
- * @description Crea un nuevo producto asociado a un sitio.
+ * @description Crea un nuevo producto asociado a un sitio (menú).
+ * @param {FormData} formData - Los datos del formulario que deben cumplir con `CreateProductClientSchema`.
+ * @returns {Promise<ActionResult<{ id: string }, { errorId: string }>>} El resultado de la operación.
  */
 export async function createProductAction(
   formData: FormData,
@@ -90,10 +92,10 @@ export async function createProductAction(
     await createAuditLog('product.created', {
       userId: user.id,
       targetEntityId: newProduct.id,
-      metadata: { name, siteId },
+      metadata: { name, siteId, workspaceId: permissionCheck.data.entity.workspace_id },
     });
 
-    revalidatePath(`/dashboard/sites/${siteId}/campaigns`);
+    revalidatePath(`/dashboard/sites/${siteId}/products`);
 
     return { success: true, data: { id: newProduct.id } };
   } catch (error) {
@@ -112,10 +114,7 @@ export async function createProductAction(
  * @section Melhora Contínua
  *
  * @subsection Melhorias Futuras
- * - ((Vigente)) **Slug Único Garantizado:** A geração atual de `slug` é básica. Uma melhoria de élite seria mover esta lógica para uma função RPC de PostgreSQL (`create_product_with_unique_slug`) que, em caso de colisão, añada um sufijo numérico de forma atómica.
- *
- * @subsection Melhorias Adicionadas
- * - ((Implementada)) **Resolução de Erros de Compilação:** Corrigidas todas as importações para os helpers e validadores corretos, tornando a ação compilável e funcional.
- * - ((Implementada)) **Lógica de Autorização Robusta:** A ação agora utiliza o helper `requireSitePermission`, garantindo que a lógica de segurança seja centralizada e consistente.
+ * - ((Vigente)) **Slug Único Garantizado:** A geração atual de `slug` é básica. Uma melhoria de élite seria mover esta lógica para uma função RPC de PostgreSQL (`create_product_with_unique_slug`) que, em caso de colisão, adicione um sufixo numérico (ex: `hamburguesa-clasica-2`) de forma atómica.
+ * - ((Vigente)) **Transaccionalidad con RPC:** Mover a lógica de inserção do produto e a criação do log de auditoria para uma única função RPC para garantir a atomicidade completa da operação.
  */
 // src/lib/actions/products/create.action.ts
