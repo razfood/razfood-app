@@ -64,7 +64,7 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "dataloader": "^2.2.2",
-    "dayjs": "1.11.14",
+    "dayjs": "1.11.15",
     "framer-motion": "^11.3.19",
     "graphql": "^16.11.0",
     "lucide-react": "0.542.0",
